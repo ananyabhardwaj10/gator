@@ -1,10 +1,14 @@
 package main
+
+import _ "github.com/lib/pq"
 import (
 	"fmt"
 	"log"
 	"os"
 
+	"database/sql"
 	"github.com/ananyabhardwaj10/gator/internal/config"
+	"github.com/ananyabhardwaj10/gator/internal/database"
 )
 
 func main() {
@@ -12,8 +16,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	db, err := sql.Open("postgres", cfg.DBURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbQueries := database.New(db)
 	
 	s := state{
+		db:dbQueries,
 		cfg:&cfg, 
 	}
 
@@ -22,6 +34,9 @@ func main() {
 	}
 
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
+	cmds.register("reset", handlerReset)
+	cmds.register("users", handlerGetUsers)
 
 	args := os.Args
 
@@ -37,7 +52,7 @@ func main() {
 
 	err = cmds.run(&s, cmd)
 	if err != nil {
-		fmt.Printf("Error encountered: %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
