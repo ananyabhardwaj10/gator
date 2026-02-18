@@ -116,3 +116,66 @@ func handlerGetUsers(s *state, cmd command) error {
 	}
 	return nil 
 }
+
+func handlerAgg(s *state, cmd command) error {
+	ctx := context.Background()
+	feed, err := fetchFeed(ctx, "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err 
+	}
+
+	fmt.Println(feed)
+	return nil 
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+	if len(cmd.Args) < 2 {
+		return fmt.Errorf("please pass a valid feed name or url")
+	}
+	name := cmd.Args[0]
+	url := cmd.Args[1]
+
+	userName := s.cfg.CurrentUserName
+	user, err := s.db.GetUser(context.Background(), userName)
+	if err != nil {
+		return err 
+	}
+	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID: uuid.New(), 
+		CreatedAt: time.Now(), 
+		UpdatedAt: time.Now(), 
+		Name: name, 
+		Url: url, 
+		UserID: user.ID,
+	})
+	if err != nil {
+		return err 
+	}
+	fmt.Printf("ID: %s\n", feed.ID)
+	fmt.Printf("Created: %v\n", feed.CreatedAt)
+	fmt.Printf("Updated: %v\n", feed.UpdatedAt)
+	fmt.Printf("Name: %s\n", feed.Name)
+	fmt.Printf("URL: %s\n", feed.Url)
+	fmt.Printf("User: %s\n", userName)
+
+	return nil 
+}
+
+func handlerFeeds(s *state, cmd command) error {
+	feedList, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return err 
+	}
+
+	for _, feed := range feedList {
+		user, err := s.db.GetUserByID(context.Background(), feed.UserID)
+		if err != nil {
+			return err 
+		}
+
+		fmt.Printf("Feed Name: %s\n", feed.Name)
+		fmt.Printf("URL: %s\n", feed.Url)
+		fmt.Printf("UserName: %s\n", user.Name)
+	}
+	return nil 
+}
