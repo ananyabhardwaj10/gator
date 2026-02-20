@@ -5,11 +5,28 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"context"
 
 	"database/sql"
 	"github.com/ananyabhardwaj10/gator/internal/config"
 	"github.com/ananyabhardwaj10/gator/internal/database"
 )
+
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		user_name := s.cfg.CurrentUserName
+		user, err := s.db.GetUser(context.Background(), user_name)
+		if err != nil {
+			return err 
+		}
+		err = handler(s, cmd, user)
+		if err != nil {
+			return err 
+		}
+
+		return nil 
+	}
+}
 
 func main() {
 	cfg, err := config.Read()
@@ -38,10 +55,11 @@ func main() {
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerGetUsers)
 	cmds.register("agg", handlerAgg)
-	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("addfeed", middlewareLoggedIn(handlerAddFeed))
 	cmds.register("feeds", handlerFeeds)
-	cmds.register("follow", handlerFollow)
-	cmds.register("following", handlerFollowing)
+	cmds.register("follow", middlewareLoggedIn(handlerFollow))
+	cmds.register("following", middlewareLoggedIn(handlerFollowing))
+	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
 
 	args := os.Args
 

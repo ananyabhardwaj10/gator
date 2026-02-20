@@ -128,18 +128,13 @@ func handlerAgg(s *state, cmd command) error {
 	return nil 
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) < 2 {
 		return fmt.Errorf("please pass a valid feed name or url")
 	}
 	name := cmd.Args[0]
 	url := cmd.Args[1]
 
-	userName := s.cfg.CurrentUserName
-	user, err := s.db.GetUser(context.Background(), userName)
-	if err != nil {
-		return err 
-	}
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID: uuid.New(), 
 		CreatedAt: time.Now(), 
@@ -168,7 +163,7 @@ func handlerAddFeed(s *state, cmd command) error {
 	fmt.Printf("Updated: %v\n", feed.UpdatedAt)
 	fmt.Printf("Name: %s\n", feed.Name)
 	fmt.Printf("URL: %s\n", feed.Url)
-	fmt.Printf("User: %s\n", userName)
+	fmt.Printf("User: %s\n", user.Name)
 
 	return nil 
 }
@@ -192,14 +187,9 @@ func handlerFeeds(s *state, cmd command) error {
 	return nil 
 }
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 1 {
 		return fmt.Errorf("please pass a valid url")
-	}
-
-	user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return err 
 	}
 
 	feed, err := s.db.GetFeedFromURL(context.Background(), cmd.Args[0])
@@ -224,11 +214,7 @@ func handlerFollow(s *state, cmd command) error {
 	return nil 
 }
 
-func handlerFollowing(s *state, cmd command) error {
-	user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
-	if err != nil {
-		return err 
-	}
+func handlerFollowing(s *state, cmd command, user database.User) error {
 	feed_follow_list, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		return err 
@@ -237,5 +223,27 @@ func handlerFollowing(s *state, cmd command) error {
 	for _, feed := range feed_follow_list {
 		fmt.Println(feed.FeedName)
 	}
+	return nil 
+}
+
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("please pass a valid url")
+	}
+
+	feed, err := s.db.GetFeedFromURL(context.Background(), cmd.Args[0])
+	if err != nil {
+		return err 
+	}
+
+	err = s.db.DeleteFeedFollow(context.Background(), database.DeleteFeedFollowParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+	if err != nil {
+		return err 
+	}
+
+	fmt.Println("Feed Unfollowed successfully.")
 	return nil 
 }
