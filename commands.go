@@ -117,15 +117,56 @@ func handlerGetUsers(s *state, cmd command) error {
 	return nil 
 }
 
-func handlerAgg(s *state, cmd command) error {
+func scrapeFeeds(s *state, cmd command) error {
 	ctx := context.Background()
-	feed, err := fetchFeed(ctx, "https://www.wagslane.dev/index.xml")
+	feed, err := s.db.GetNextFeedToFetch(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Println("Nothing to scrape")
+			return nil 
+		}
+		return err 
+	}
+	
+	err = s.db.MarkFeedFetched(ctx, feed.ID)
 	if err != nil {
 		return err 
 	}
 
-	fmt.Println(feed)
+	f, err := fetchFeed(ctx, feed.Url)
+	if err != nil {
+		fmt.Printf("Error occured: %s for the feed name: %s feed url: %s\n", err, feed.Name, feed.Url) 
+		return nil 
+	}
+
+	for _, item := range f.Channel.Item {
+		fmt.Println(item.Title)
+	}
+
 	return nil 
+}
+
+func handlerAgg(s *state, cmd command) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("please pass a valid time request")
+	}
+
+	durationStr := cmd.Args[0]
+	timeBetween, err := time.ParseDuration(durationStr)
+	if err != nil {
+		return err 
+	}
+
+	fmt.Printf("Collecting feeds every %s\n", timeBetween)
+	ticker := time.NewTicker(timeBetween)
+	defer ticker.Stop()
+
+	for ; ; <-ticker.C {
+		err = scrapeFeeds(s, cmd)
+		if err != nil {
+			fmt.Printf("Error in the loop: %s\n", err)
+			continue
+	}}
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
