@@ -5,6 +5,9 @@ import (
 	"time"
 	"context"
 	"database/sql"
+	"strings"
+	"strconv"
+	"log"
 
 	"github.com/lib/pq"
 	"github.com/google/uuid"
@@ -140,7 +143,28 @@ func scrapeFeeds(s *state, cmd command) error {
 	}
 
 	for _, item := range f.Channel.Item {
-		fmt.Println(item.Title)
+		pubDate, err := time.Parse(time.RFC1123Z, item.PubDate)
+		if err != nil {
+			pubDate = time.Now()
+		}
+
+		_, err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID: uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Title: item.Title,
+			Url: item.Link,
+			Description: item.Description,
+			PublishedAt: pubDate,
+			FeedID: feed.ID,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "unique constraint"){
+				fmt.Println("Post already exists. Moving on to next one.")
+				continue 
+			}
+			log.Printf("Could not create post: %v", err)
+		}
 	}
 
 	return nil 
@@ -287,4 +311,36 @@ func handlerUnfollow(s *state, cmd command, user database.User) error {
 
 	fmt.Println("Feed Unfollowed successfully.")
 	return nil 
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	var limit int 
+	var err error 
+	if len(cmd.Args) == 1 {
+		limit, err = strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			return fmt.Errorf("Could not convert string to integer.")
+		}
+	} else {
+		limit = 2
+	}
+
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit: int32(limit),
+	})
+	if err != nil {
+		return err 
+	}
+
+	fmt.Printf("Found %d posts for user %s\n", len(posts), user.Name)
+
+	for _, post := range posts {
+		fmt.Printf("Title: %s\n", post.Title)
+		fmt.Printf("Description: %s\n", post.Description)
+		fmt.Printf("Link: %s\n", post.Url)
+	}
+
+	return nil 
+
 }
